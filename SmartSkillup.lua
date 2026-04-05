@@ -113,7 +113,10 @@ function start_timeout(delay, source)
 end
 
 function end_timeout(source)
-	coroutine.close(threads.timeout)
+	if threads.timeout then
+		pcall(coroutine.close, threads.timeout)
+		threads.timeout = nil
+	end
 	logger(chat_colors.purple, '[TIMEOUT END] Timeout ended' .. (source and ' by ' .. source or '') .. '.', false, true)
 end
 
@@ -123,7 +126,10 @@ function schedule_decision(delay, source, ...)
 end
 
 function end_decision()
-	coroutine.close(threads.make_decision)
+	if threads.make_decision then
+		pcall(coroutine.close, threads.make_decision)
+		threads.make_decision = nil
+	end
 end
 
 function end_timeout_and_decision(source, ...)
@@ -638,7 +644,9 @@ function process_outgoing_chunk(id, data, modified, injected, blocked)
 	
 	-- PLAYER CHANGED SET BLU SPELLS
 	elseif id == 0x102 then
-		coroutine.close(threads.update_me_blu_spells) -- avoid processing spammed packets
+		if threads.update_me_blu_spells then
+			pcall(coroutine.close, threads.update_me_blu_spells)
+		end
 		threads.update_me_blu_spells = update_me_blu_spells:schedule(7)
 	
 	-- PLAYER INCREASED A MERIT ABILITY
@@ -690,7 +698,9 @@ function process_incoming_chunk(id, data, modified, injected, blocked)
 
 	-- PARTY STRUCTURE UPDATE PACKETS
 	elseif id == 0x0C8 then
-		coroutine.close(threads.update_me_party) -- avoid processing spammed packets
+		if threads.update_me_party then
+			pcall(coroutine.close, threads.update_me_party)
+		end
 		threads.update_me_party = update_me_party:schedule(1)
 	end
 end

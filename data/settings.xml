@@ -8,4 +8,7 @@
         <ui_hidden>false</ui_hidden>
         <user_ui_scalar>1</user_ui_scalar>
     </global>
+    <sawatis>
+        <user_ui_scalar>2</user_ui_scalar>
+    </sawatis>
 </settings>

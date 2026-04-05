@@ -306,7 +306,7 @@ function skill_data_request_timeout(attempts)
 	local attempts_max = (60/freq)*1 --1 minute
 	-- SKILL DATA RETRIEVED
 	if skill_data_retrieved then
-		logger(chat_colors.purple, '[SKILL DATA RECEIVED] Recieved the data on attempt ' .. attempts .. '/' .. attempts_max, true)
+		logger(chat_colors.purple, '[SKILL DATA RECEIVED] Received the data on attempt ' .. attempts .. '/' .. attempts_max, true)
 	
 	-- SKILL DATA NEEDED
 	elseif attempts <= attempts_max then
@@ -317,7 +317,9 @@ function skill_data_request_timeout(attempts)
 		
 		attempts = attempts + 1
 		windower.packets.inject_outgoing(0x061, 0:char():rep(8)) -- requests skill packet, packet processor runs initialize_ui() if skill_data_retrieved is false
-		coroutine.close(threads.skill_data_request_timeout)
+		if threads.skill_data_request_timeout then
+			pcall(coroutine.close, threads.skill_data_request_timeout)
+		end
 		threads.skill_data_request_timeout = skill_data_request_timeout:schedule(freq, attempts)
 		logger(chat_colors.purple, '[SKILL REQUEST] Requesting skill data from server; attempt ' .. attempts .. '/' .. attempts_max, true)
 	
@@ -389,7 +391,9 @@ function begin_loop(source, notify)
 	logger(chat_colors.green, '[' .. verbiage[1] .. '] Skillup session ' .. verbiage[2] .. '...', not notify and true or nil)
 	
 	-- ENSURE SINGLE TIMEOUT, THEN START DECISION
-	coroutine.close(threads.begin_loop)
+	if threads.begin_loop then
+		pcall(coroutine.close, threads.begin_loop)
+	end
 	end_timeout_and_decision(source, chat_colors.purple, '[NEW LOOP] Ending any scheduled timeout and decision...', true)
 	going = true
 	make_decision(source)
@@ -429,7 +433,10 @@ function initialize_healing_notice(total_delay, reason, first)
 end
 
 function terminate_healing_notice(reason)
-	coroutine.close(threads.healing_notice)
+	if threads.healing_notice then
+		pcall(coroutine.close, threads.healing_notice)
+		threads.healing_notice = nil
+	end
 	if me.healing_countdown_running then
 		me.healing_countdown_running = nil
 		logger(chat_colors.yellow, '[RESTING CANCELLED] Cancelled the scheduled healing session.' .. (reason and ' (Reason: ' .. reason .. ')' or ''))
@@ -442,7 +449,7 @@ end
 -- The new and improved event pause system, allowing all event pauses to co-exist!
 -- KEYS: healing, moving, npc, zoning, various-statuses
 -------------------------------------------------------------------------------------------------------------------
-event_pauses = T(setmetatable({}, {__index=function(t,k) return t[k] end,__newindex=function()end}))
+event_pauses = T(setmetatable({}, {__index=function(t,k) return rawget(t, k) end,__newindex=function()end}))
 event_pauses_metatable = setmetatable({}, {
 	__newindex = function(t, k, v)
 		-- GET START COUNT
@@ -499,7 +506,10 @@ event_pauses_metatable = setmetatable({}, {
 })
 
 function pause_event(event)
-	coroutine.close(threads['sched_' .. event .. '_unpause']) -- end event's delayed unpause, it'd be premature now
+	if threads['sched_' .. event .. '_unpause'] then
+		pcall(coroutine.close, threads['sched_' .. event .. '_unpause']) -- end event's delayed unpause, it'd be premature now
+		threads['sched_' .. event .. '_unpause'] = nil
+	end
 	event_pauses_metatable[event] = true
 end
 
@@ -604,14 +614,14 @@ function determine_modules()
 			-- REFRESH MODULE, weighted by priority
 			if spell.en == 'Refresh III' then
 				modules.refresh:update({available = true, res = {res.spells:find(function(r) return r.en == 'Refresh III' end)}[2]})
-			elseif spell.en == 'Refresh II' and modules.refresh.en ~= 'Refresh III' then
+			elseif spell.en == 'Refresh II' and ((modules.refresh.res or {}).en ~= 'Refresh III') then
 				modules.refresh:update({available = true, res = {res.spells:find(function(r) return r.en == 'Refresh II' end)}[2]})
 			elseif spell.en == 'Refresh' and not modules.refresh.available then
 				modules.refresh:update({available = true, res = {res.spells:find(function(r) return r.en == 'Refresh' end)}[2]})
 			elseif spell.en == 'Battery Charge' then
 				modules.refresh:update({available = true, res = {res.spells:find(function(r) return r.en == 'Battery Charge' end)}[2]})
 			-- HASTE MODULE, weighted by priority
-			elseif spell.en == 'Erratic Fluttter' then
+			elseif spell.en == 'Erratic Flutter' then
 				modules.haste:update  ({available = true, res = {res.spells:find(function(r) return r.en == 'Erratic Flutter' end)}[2]})
 			elseif spell.en == 'Haste II' then
 				modules.haste:update({available = true, res = {res.spells:find(function(r) return r.en == 'Haste II' end)}[2]})

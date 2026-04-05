@@ -34,7 +34,7 @@ known_spells = T{} -- keep these separate to avoid bloating me data
 ability_recasts = T{}
 buffactive = T{}
 buffidactive = T{}
-event_pause = T{} -- used to track event pauses (movement, zoning, NPC locks)
+event_pauses = event_pauses or T{} -- used to track event pauses (movement, zoning, NPC locks)
 
 
 
@@ -42,16 +42,19 @@ event_pause = T{} -- used to track event pauses (movement, zoning, NPC locks)
 -- Builds the me table from ffxi.player and adds in additional flags
 -------------------------------------------------------------------------------------------------------------------
 function build_me_table()
-	me = T(windower.ffxi.get_player())
+	me = T(windower.ffxi.get_player() or {})
+	if not me or not me.id then
+		return
+	end
 	
 	-- MOVE VITALS TO ROOT
-	for k, v in pairs(me.vitals) do
+	for k, v in pairs(me.vitals or {}) do
 		me[k] = v
 	end
 	
 	-- MOVE BUFFS TO BUFFACTIVE
 	me.JA_locked = false
-	for _, id in pairs(me.buffs) do
+	for _, id in pairs(me.buffs or {}) do
 		local buff = res.buffs[id]
 		if buff then
 			buffactive[buff.en] = true
@@ -68,11 +71,16 @@ function build_me_table()
 	end
 	
 	-- DETECT PAUSE EVENT VIA STATUS (newStatus, oldStatus, newStatusId, oldStatusId)
-	process_status_events(res.statuses[me.status].en, nil, me.status)
+	local status_res = res.statuses[me.status]
+	if status_res and status_res.en then
+		process_status_events(status_res.en, nil, me.status)
+	end
 	
 	-- ADD/MANIPULATE VARIOUS DATA
 	me.status = res.statuses[me.status] and res.statuses[me.status].en
-	me.in_town = cities:find(res.zones[windower.ffxi.get_info().zone].en) or false
+	local info = windower.ffxi.get_info() or {}
+	local zone = res.zones[info.zone]
+	me.in_town = cities:find(zone and zone.en or '') or false
 	
 	-- ADD DATA VIA HELPER FUNCTIONS
 	update_me_party()
@@ -89,9 +97,12 @@ end
 -- Rebuilds me's party table and sets the me.can_summon_trusts and me.has_trust_target flags
 -------------------------------------------------------------------------------------------------------------------
 function update_me_party()
-	local p = windower.ffxi.get_party()
+	local p = windower.ffxi.get_party() or {}
 	me.party = T{}
-	me.can_summon_trusts = p.party3_count == 0 and p.party2_count == 0 and p.party1_count == 1 or p.party1_leader == me.id
+	local party3_count = tonumber(p.party3_count) or 0
+	local party2_count = tonumber(p.party2_count) or 0
+	local party1_count = tonumber(p.party1_count) or 0
+	me.can_summon_trusts = (party3_count == 0 and party2_count == 0 and party1_count == 1) or p.party1_leader == me.id
 	me.has_trust_target = false
 	for i = 0, 5, 1 do
 		local m = p['p' .. i]
@@ -120,7 +131,9 @@ function update_me_food_locations(immediate, item_used)
 	
 	-- ITEM ADD/REMOVE/USE: RESCHEDULE TO IGNORE ITEM ADD/REMOVE/USE SPAM
 	elseif not immediate or immediate == false then
-		coroutine.close(threads.update_me_food_locations) -- only process last event in spam scenario
+		if threads.update_me_food_locations then
+			pcall(coroutine.close, threads.update_me_food_locations)
+		end
 		threads.update_me_food_locations = update_me_food_locations:schedule(3, true, item_used)
 		return logger(chat_colors.purple, '[SKILLUP FOOD MOVED] Rebuilding food locations in 3 secs...', true)
 	end
@@ -187,7 +200,11 @@ end
 -- Updates me's assigned BLU spells (versus known BLU spells)
 -------------------------------------------------------------------------------------------------------------------
 function update_me_blu_spells()
-	me.blu_spells = T(windower.ffxi.get_mjob_data().spells):map(function(id) return res.spells[id].en end) --CREDIT: Azuresets.lua
+	me.blu_spells = T(windower.ffxi.get_mjob_data().spells):map(function(id)
+		return res.spells[id] and res.spells[id].en
+	end):filter(function(name)
+		return name ~= nil
+	end) -- CREDIT: Azuresets.lua
 end
 
 
@@ -210,7 +227,7 @@ end
 -- Updates me's zone
 -------------------------------------------------------------------------------------------------------------------
 function update_me_zone(new_id, old_id)
-	me.zone = res.zones[new_id].en
+	me.zone = res.zones[new_id] and res.zones[new_id].en or me.zone
 	me.in_town = cities:find(me.zone)
 	me.zoning = true
 	coroutine.schedule(function() me.zoning = nil end, 2)
